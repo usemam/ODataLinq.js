@@ -35,7 +35,7 @@
                 ok(checkSorting(data, "Name", true), "Single field");
                 start();
             });
-        
+
         ODataLinq
             .from(baseAddress + "Products")
             .orderby("-Name")
@@ -132,6 +132,39 @@
                     function(product) {
                         return product.Id <= 2;
                     }).length == data.length, "'lessEquals'");
+                start();
+            });
+
+        ODataLinq
+            .from(baseAddress + "Products")
+            .contains("Name", "oil")
+            .select(function(data) {
+                ok(data != null && $.grep(data,
+                    function(product) {
+                        return product.Name.indexOf("oil") > -1;
+                    }).length == data.length, "'contains'");
+                start();
+            });
+
+        ODataLinq
+            .from(baseAddress + "Products")
+            .starts("Name", "B")
+            .select(function(data) {
+                ok(data != null && $.grep(data,
+                    function(product) {
+                        return product.Name[0] == "B";
+                    }).length == data.length, "'starts'");
+                start();
+            });
+        
+        ODataLinq
+            .from(baseAddress + "Products")
+            .ends("Name", "oil")
+            .select(function(data) {
+                ok(data != null && $.grep(data,
+                    function(product) {
+                        return product.Name.lastIndexOf("oil") == product.Name.length - 3;
+                    }).length == data.length, "'ends'");
                 start();
             });
     });

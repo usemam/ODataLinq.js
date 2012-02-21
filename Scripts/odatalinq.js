@@ -255,7 +255,10 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             2: " gt ",
             3: " ge ",
             4: " lt ",
-            5: " le "
+            5: " le ",
+            9: "substringof(#1, #0) eq true",
+            10: "startswith(#0, #1) eq true",
+            11: "endswith(#0, #1) eq true"
         };
 
         this.interpret = function() {
@@ -267,6 +270,11 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 case operationType.Lt:
                 case operationType.Le:
                     return this.field + logicalOperationAlias[this.operation] + this.value;
+                case operationType.Contains:
+                case operationType.Starts:
+                case operationType.Ends:
+                    return logicalOperationAlias[this.operation]
+                        .replace("#0", this.field).replace("#1", this.value);
                 default:
                     throw new Error("Unsupported operation type");
             }
@@ -301,7 +309,10 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         Le: 5,
         And: 6,
         Or: 7,
-        Not: 8
+        Not: 8,
+        Contains: 9,
+        Starts: 10,
+        Ends: 11
     };
 
     var context = function (uri) {
@@ -365,7 +376,8 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         return this.reveal("orderby", "select", "take", "skip");
     };
     context.prototype.filter = function () {
-        return this.reveal("not", "equals", "notEquals", "greater", "greaterEquals", "less", "lessEquals");
+        return this.reveal("not", "equals", "notEquals", "greater", "greaterEquals",
+            "less", "lessEquals", "contains", "starts", "ends");
     };
     context.prototype.filterFrom = function () {
         return extend(this.filter(), this.from());
@@ -399,6 +411,15 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     };
     context.prototype.lessEquals = function(field, value) {
         return this.addTerminalExpression(operationType.Le, arguments);
+    };
+    context.prototype.contains = function(field, value) {
+        return this.addTerminalExpression(operationType.Contains, arguments);
+    };
+    context.prototype.starts = function(field, value) {
+        return this.addTerminalExpression(operationType.Starts, arguments);
+    };
+    context.prototype.ends = function(field, value) {
+        return this.addTerminalExpression(operationType.Ends, arguments);
     };
     context.prototype.orderby = function () {
         this.queryOptions = new orderBy(arguments, this.queryOptions);
