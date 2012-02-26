@@ -357,7 +357,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         }
         return this.revealingObjects[objectKey] = revealingObject;
     };
-    context.prototype.addFilterExpression = function(type, operands) {
+    context.prototype.addExpression = function(type, operands, returnMethod) {
         var expression = new filterExpression(type, operands);
         if (!this.filterHead) {
             this.filterHead = expression;
@@ -366,72 +366,65 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         else {
             this.filterHead.add(expression);
         }
-    };
-    context.prototype.addTerminalExpression = function(type, operands) {
-        this.addFilterExpression(type, operands);
-        return this.filterFromOr();
+        if (!returnMethod) {
+            returnMethod = "fromOr";
+        }
+        return this[returnMethod]();
     };
 
     context.prototype.from = function () {
-        return this.reveal("orderby", "select", "take", "skip");
-    };
-    context.prototype.filter = function () {
-        return this.reveal("not", "equals", "notEquals", "greater", "greaterEquals",
+        return this.reveal("orderby", "select", "take", "skip",
+            "not", "equals", "notEquals", "greater", "greaterEquals",
             "less", "lessEquals", "contains", "starts", "ends");
     };
-    context.prototype.filterFrom = function () {
-        return extend(this.filter(), this.from());
-    };
-    context.prototype.filterFromOr = function () {
-        return extend(this.filterFrom(), this.reveal("or"));
+    context.prototype.fromOr = function () {
+        return extend(this.from(), this.reveal("or"));
     };
 
     context.prototype.or = function () {
-        this.addFilterExpression(operationType.Or, null);
-        return this.filterFrom();
+        return this.addExpression(operationType.Or, null, "from");
     };
     context.prototype.not = function () {
-        this.addFilterExpression(operationType.Not, null);
-        return this.filterFrom();
+        return this.addExpression(operationType.Not, null, "from");
     };
     context.prototype.equals = function(field, value) {
-        return this.addTerminalExpression(operationType.Eq, arguments);
+        return this.addExpression(operationType.Eq, arguments);
     };
     context.prototype.notEquals = function(field, value) {
-        return this.addTerminalExpression(operationType.Ne, arguments);
+        return this.addExpression(operationType.Ne, arguments);
     };
     context.prototype.greater = function(field, value) {
-        return this.addTerminalExpression(operationType.Gt, arguments);
+        return this.addExpression(operationType.Gt, arguments);
     };
     context.prototype.greaterEquals = function(field, value) {
-        return this.addTerminalExpression(operationType.Ge, arguments);
+        return this.addExpression(operationType.Ge, arguments);
     };
     context.prototype.less = function(field, value) {
-        return this.addTerminalExpression(operationType.Lt, arguments);
+        return this.addExpression(operationType.Lt, arguments);
     };
     context.prototype.lessEquals = function(field, value) {
-        return this.addTerminalExpression(operationType.Le, arguments);
+        return this.addExpression(operationType.Le, arguments);
     };
     context.prototype.contains = function(field, value) {
-        return this.addTerminalExpression(operationType.Contains, arguments);
+        return this.addExpression(operationType.Contains, arguments);
     };
     context.prototype.starts = function(field, value) {
-        return this.addTerminalExpression(operationType.Starts, arguments);
+        return this.addExpression(operationType.Starts, arguments);
     };
     context.prototype.ends = function(field, value) {
-        return this.addTerminalExpression(operationType.Ends, arguments);
+        return this.addExpression(operationType.Ends, arguments);
     };
     context.prototype.orderby = function () {
         this.queryOptions = new orderBy(arguments, this.queryOptions);
-        return this.filterFrom();
+        return this.from();
     };
     context.prototype.take = function (number) {
         this.queryOptions = new top(number, this.queryOptions);
-        return this.filterFrom();
+        return this.from();
     };
     context.prototype.skip = function (number) {
         this.queryOptions = new skip(number, this.queryOptions);
-        return this.filterFrom();
+        return this.from();
     };
     context.prototype.select = function (callback) {
         this.ajax(callback);
@@ -440,7 +433,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     window.ODataLinq = {
         from: function (uri) {
             var ctx = new context(uri);
-            return ctx.filterFrom();
+            return ctx.from();
         }
     };
 })(window);
