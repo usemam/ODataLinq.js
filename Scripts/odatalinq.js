@@ -366,9 +366,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         else {
             this.filterHead.add(expression);
         }
-        if (!returnMethod) {
-            returnMethod = "fromOr";
-        }
+        returnMethod = returnMethod || "fromOr";
         return this[returnMethod]();
     };
 
