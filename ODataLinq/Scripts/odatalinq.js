@@ -16,26 +16,64 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 (function (window, undefined) {
+    var jsonpReqCounter = 0;
+
+    var ajaxHelper = {
+        getResponseInnerData: function(data) {
+            if (data) {
+                data = data.d;
+            }
+            if (data && data.results) {
+                data = data.results;
+            }
+            return data;
+        },
+        isCrossDomainRequest: function(requestUri) {
+            var urlRegex = /^([\w\+\.\-]+:)(?:\/\/([^\/?#:]*)(?::(\d+))?)?/;
+            
+            var ajaxLocation,
+                ajaxLocParts,
+                parts;
+
+            try {
+                ajaxLocation = location.href;
+            } catch (e) {
+                ajaxLocation = window.document.createElement("a");
+                ajaxLocation.href = "";
+                ajaxLocation = ajaxLocation.href;
+            }
+
+            ajaxLocParts = urlRegex.exec(ajaxLocation.toLowerCase()) || [];
+
+            parts = urlRegex.exec(requestUri.toLowerCase());
+
+            return !!(parts &&
+                (parts[1] != ajaxLocParts[1] || parts[2] != ajaxLocParts[2] ||
+                    (parts[3] || (parts[1] === "http:" ? 80 : 443)) !=
+                        (ajaxLocParts[3] || (ajaxLocParts[1] === "http:" ? 80 : 443)))
+            );
+        }
+    };
+
     var ajax = function (options) {
         this.uri = options.uri;
         this.callback = options.callback;
+
+        this.crossDomain = window.ODataLinq.ajaxHelper.isCrossDomainRequest(this.uri);
     };
-    ajax.prototype.request = function () {
+    
+    ajax.prototype.requestThroughXhr = function() {
         var that = this;
 
         this.xhr = this.createXhr();
         this.xhr.open("GET", this.uri, true);
         this.xhr.setRequestHeader("accept", "application/json");
         this.xhr.onreadystatechange = function () {
-            if (this.readyState != 4) return;
+            if (this.readyState != 4)
+                return;
             if (this.status == 200) {
                 var data = JSON.parse(this.responseText);
-                if (data) {
-                    data = data.d;
-                }
-                if (data && data.results) {
-                    data = data.results;
-                }
+                data = window.ODataLinq.ajaxHelper.getResponseInnerData(data);
                 that.callback(data);
             }
             else {
@@ -44,6 +82,45 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         };
         this.xhr.send(null);
     };
+    
+    ajax.prototype.requestJsonP = function() {
+        var script,
+            that = this,
+            reqHandlerName = "expando_" + jsonpReqCounter,
+			head = document.head || document.getElementsByTagName("head")[0] || document.documentElement;
+
+        jsonpReqCounter++;
+
+        window.ODataLinq[reqHandlerName] = function(response) {
+            that.callback(window.ODataLinq.ajaxHelper.getResponseInnerData(response));
+            delete window.ODataLinq[reqHandlerName];
+        };
+
+        script = document.createElement("script");
+        script.async = "async";
+        script.src = this.uri + (this.uri.indexOf("?") > 0 ? "" : "?") + "&$format=json&$callback=ODataLinq." + reqHandlerName;
+        script.onload = script.onreadystatechange = function () {
+            if (!script.readyState || /loaded|complete/.test(script.readyState)) {
+
+                script.onload = script.onreadystatechange = null;
+
+                if (head && script.parentNode) {
+                    head.removeChild(script);
+                }
+
+                script = undefined;
+            }
+        };
+        head.insertBefore(script, head.firstChild);
+    };
+    
+    ajax.prototype.request = function () {
+        if (this.crossDomain)
+            this.requestJsonP();
+        else
+            this.requestThroughXhr();
+    };
+    
     ajax.prototype.createXhr = function () {
         if (typeof XMLHttpRequest === 'undefined') {
             try {
@@ -145,6 +222,15 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         };
     };
     inherit(skip, queryOption);
+
+    var expand = function(property, tail) {
+        expand.parent.constructor.call(this, tail);
+
+        this.parseInternal = function() {
+            return "$expand=" + property;
+        };
+    };
+    inherit(expand, queryOption);
 
     var filter = function (root, tail) {
         filter.parent.constructor.call(this, tail);
@@ -286,6 +372,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         this.operands = operands;
         this.next = null;
     };
+    
     filterExpression.prototype.add = function (expression) {
         if (!this.next) {
             this.next = expression;
@@ -294,6 +381,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             this.next.add(expression);
         }
     };
+    
     filterExpression.prototype.isTerminal = function() {
         return this.operation != operationType.Not
             || this.operation != operationType.Or
@@ -320,6 +408,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         this.queryOptions = null;
         this.filterHead = null;
     };
+    
     context.prototype.ajax = function (callback) {
         var request = new ajax({
             uri: this.parseUri(),
@@ -328,12 +417,14 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         request.request();
         return request;
     };
+    
     context.prototype.parseUri = function () {
         if (this.queryOptions) {
             return this.uri + "?" + this.queryOptions.parse();
         }
         return this.uri;
     };
+    
     context.prototype.reveal = function () {
         var ctx = this;
 
@@ -357,6 +448,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         }
         return this.revealingObjects[objectKey] = revealingObject;
     };
+    
     context.prototype.addExpression = function(type, operands, returnMethod) {
         var expression = new filterExpression(type, operands);
         if (!this.filterHead) {
@@ -371,10 +463,11 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     };
 
     context.prototype.from = function () {
-        return this.reveal("orderby", "select", "take", "skip",
+        return this.reveal("orderby", "select", "take", "skip", "join",
             "not", "equals", "notEquals", "greater", "greaterEquals",
             "less", "lessEquals", "contains", "starts", "ends");
     };
+    
     context.prototype.fromOr = function () {
         return extend(this.from(), this.reveal("or"));
     };
@@ -382,56 +475,76 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     context.prototype.or = function () {
         return this.addExpression(operationType.Or, null, "from");
     };
+    
     context.prototype.not = function () {
         return this.addExpression(operationType.Not, null, "from");
     };
+    
     context.prototype.equals = function(field, value) {
         return this.addExpression(operationType.Eq, arguments);
     };
+    
     context.prototype.notEquals = function(field, value) {
         return this.addExpression(operationType.Ne, arguments);
     };
+    
     context.prototype.greater = function(field, value) {
         return this.addExpression(operationType.Gt, arguments);
     };
+    
     context.prototype.greaterEquals = function(field, value) {
         return this.addExpression(operationType.Ge, arguments);
     };
+    
     context.prototype.less = function(field, value) {
         return this.addExpression(operationType.Lt, arguments);
     };
+    
     context.prototype.lessEquals = function(field, value) {
         return this.addExpression(operationType.Le, arguments);
     };
+    
     context.prototype.contains = function(field, value) {
         return this.addExpression(operationType.Contains, arguments);
     };
+    
     context.prototype.starts = function(field, value) {
         return this.addExpression(operationType.Starts, arguments);
     };
+    
     context.prototype.ends = function(field, value) {
         return this.addExpression(operationType.Ends, arguments);
     };
+    
     context.prototype.orderby = function () {
         this.queryOptions = new orderBy(arguments, this.queryOptions);
         return this.from();
     };
+    
     context.prototype.take = function (number) {
         this.queryOptions = new top(number, this.queryOptions);
         return this.from();
     };
+    
     context.prototype.skip = function (number) {
         this.queryOptions = new skip(number, this.queryOptions);
         return this.from();
     };
+    
     context.prototype.select = function (callback) {
         this.ajax(callback);
+    };
+    
+    context.prototype.join = function(propertyName) {
+        this.queryOptions = new expand(propertyName, this.queryOptions);
+        return this.from();
     };
 
     window.ODataLinq = {
         from: function (uri) {
             var ctx = new context(uri);
             return ctx.from();
-        }
+        },
+        ajaxHelper: ajaxHelper
     };
 })(window);

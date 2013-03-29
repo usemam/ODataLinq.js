@@ -27,7 +27,9 @@
         "http://localhost/ODataService/Products?$filter=startswith(Name, 'B') eq true":
             '{"d": [{"Id": 2, "Name": "Bread"}, {"Id": 7, "Name": "Butter"}]}',
         "http://localhost/ODataService/Products?$filter=endswith(Name, 'oil') eq true":
-            '{"d": [{"Id": 6, "Name": "Olive oil"}, {"Id": 8, "Name": "Sunflower oil"}]}'
+            '{"d": [{"Id": 6, "Name": "Olive oil"}, {"Id": 8, "Name": "Sunflower oil"}]}',
+        'http://localhost/ODataService/Products?$expand=Category':
+            '{"d" :[{"Id": 1, "Name": "Meat", "Category": {"Id": 1, "Name": "Food"}}]}'
     };
 
     window.XMLHttpRequest = function() {

@@ -3,6 +3,8 @@
 
     var baseAddress = "http://localhost/ODataService/";
 
+    ODataLinq.ajaxHelper.isCrossDomainRequest = function() { return false; };
+
     asyncTest("testing 'from' method", function() {
         ODataLinq
             .from(baseAddress + "Products")
@@ -165,6 +167,19 @@
                     function(product) {
                         return product.Name.lastIndexOf("oil") == product.Name.length - 3;
                     }).length == data.length, "'ends'");
+                start();
+            });
+    });
+
+    asyncTest("testing 'join' method", function() {
+        ODataLinq
+            .from(baseAddress + "Products")
+            .join("Category")
+            .select(function(data) {
+                ok(data != null && $.grep(data,
+                    function(product) {
+                        return product.Category != null;
+                    }).length == data.length, "single call");
                 start();
             });
     });
